@@ -19,7 +19,7 @@ app.add_middleware(
 
 # Configuration Telegram
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8641085735:AAHYpbZEWkHmJ75uc4IIMv1BR30hBHVT7HM")
-TELEGRAM_ORDER_CHAT_ID = os.environ.get("TELEGRAM_ORDER_CHAT_ID", "")  # À configurer
+TELEGRAM_ORDER_CHAT_ID = os.environ.get("TELEGRAM_ORDER_CHAT_ID", "-1003963512847")
 TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
 # URL du catalogue (à mettre à jour avec votre URL)
