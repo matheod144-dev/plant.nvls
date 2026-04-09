@@ -1,20 +1,25 @@
 import { useState } from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { Leaf, MessageCircle, ExternalLink, Home, ShoppingBag, Plus } from "lucide-react";
+import { Leaf, MessageCircle, ExternalLink, Home, ShoppingBag } from "lucide-react";
 
-// Données produits CBD - Images placeholder en attendant vos vraies photos
+// Données produits CBD
 const products = [
-  // Résines CBD
-  { id: 1, name: "Afghan Gold", category: "resine", price: 8, image: "https://images.unsplash.com/photo-1603909223429-69bb7101f420?w=400&h=400&fit=crop&q=80", badge: "TOP" },
-  { id: 2, name: "Moroccan Dream", category: "resine", price: 10, image: "https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=400&h=400&fit=crop&q=80", badge: null },
-  { id: 3, name: "Nepal Temple", category: "resine", price: 12, image: "https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?w=400&h=400&fit=crop&q=80", badge: "NEW" },
-  { id: 4, name: "Blonde Libanaise", category: "resine", price: 9, image: "https://images.unsplash.com/photo-1457530378978-8bac673b8062?w=400&h=400&fit=crop&q=80", badge: null },
-  // Fleurs CBD
-  { id: 5, name: "Amnesia Haze", category: "fleur", price: 6, image: "https://images.unsplash.com/photo-1503262028195-93c528f03218?w=400&h=400&fit=crop&q=80", badge: "TOP" },
-  { id: 6, name: "OG Kush", category: "fleur", price: 7, image: "https://images.unsplash.com/photo-1603909223429-69bb7101f420?w=400&h=400&fit=crop&q=80", badge: null },
-  { id: 7, name: "Lemon Haze", category: "fleur", price: 6, image: "https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?w=400&h=400&fit=crop&q=80", badge: "NEW" },
-  { id: 8, name: "White Widow", category: "fleur", price: 8, image: "https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=400&h=400&fit=crop&q=80", badge: null },
+  // Fleurs CBD - Seul produit disponible pour le moment
+  { 
+    id: 1, 
+    name: "Amnesia", 
+    category: "fleur", 
+    image: "https://images.unsplash.com/photo-1503262028195-93c528f03218?w=400&h=400&fit=crop&q=80", 
+    badge: "TOP",
+    prices: [
+      { qty: "1g", price: 10 },
+      { qty: "2g", price: 20 },
+      { qty: "5g", price: 40 },
+      { qty: "10g", price: 80 },
+      { qty: "25g", price: 190 },
+    ]
+  },
 ];
 
 // Mini-App Landing Page
@@ -87,31 +92,23 @@ const MiniApp = () => {
 
 // Catalogue Page
 const Catalogue = () => {
-  const [activeCategory, setActiveCategory] = useState("all");
+  const [activeCategory, setActiveCategory] = useState("fleur");
   
-  const filteredProducts = activeCategory === "all" 
-    ? products 
-    : products.filter(p => p.category === activeCategory);
+  const filteredProducts = products.filter(p => p.category === activeCategory);
+  const hasProducts = filteredProducts.length > 0;
 
   return (
     <div className="catalogue-container" data-testid="catalogue">
       {/* Header Ticker */}
       <div className="ticker-header">
         <div className="ticker-content">
-          <span>🌿 Bienvenue chez plant.nvls ! Livraison rapide • CBD Premium • Qualité garantie 🌿</span>
-          <span>🌿 Bienvenue chez plant.nvls ! Livraison rapide • CBD Premium • Qualité garantie 🌿</span>
+          <span>🌿 Disponible 24h/24 7j/7 • plant.nvls • CBD Premium 🌿</span>
+          <span>🌿 Disponible 24h/24 7j/7 • plant.nvls • CBD Premium 🌿</span>
         </div>
       </div>
 
       {/* Category Tabs */}
       <div className="category-tabs" data-testid="category-tabs">
-        <button 
-          className={`tab-btn ${activeCategory === "all" ? "active" : ""}`}
-          onClick={() => setActiveCategory("all")}
-          data-testid="tab-all"
-        >
-          Tout 🌿
-        </button>
         <button 
           className={`tab-btn ${activeCategory === "fleur" ? "active" : ""}`}
           onClick={() => setActiveCategory("fleur")}
@@ -128,33 +125,53 @@ const Catalogue = () => {
         </button>
       </div>
 
-      {/* Products Grid */}
-      <div className="products-grid" data-testid="products-grid">
-        {filteredProducts.map((product) => (
-          <div key={product.id} className="product-card" data-testid={`product-${product.id}`}>
-            {product.badge && (
-              <span className={`product-badge ${product.badge.toLowerCase()}`}>
-                {product.badge}
-              </span>
-            )}
-            <div className="product-image">
-              <img src={product.image} alt={product.name} loading="lazy" />
-            </div>
-            <div className="product-info">
-              <h3 className="product-name">{product.name}</h3>
-              <span className="product-category">
-                {product.category === "resine" ? "RÉSINE" : "FLEUR"} 🌿
-              </span>
-              <div className="product-footer">
-                <span className="product-price">{product.price}€/g</span>
-                <button className="add-btn" data-testid={`add-${product.id}`}>
-                  <Plus size={20} />
+      {/* Products Grid or Coming Soon */}
+      {hasProducts ? (
+        <div className="products-grid" data-testid="products-grid">
+          {filteredProducts.map((product) => (
+            <div key={product.id} className="product-card-full" data-testid={`product-${product.id}`}>
+              {product.badge && (
+                <span className={`product-badge ${product.badge.toLowerCase()}`}>
+                  {product.badge}
+                </span>
+              )}
+              <div className="product-image-large">
+                <img src={product.image} alt={product.name} loading="lazy" />
+              </div>
+              <div className="product-info-full">
+                <h3 className="product-name-large">{product.name}</h3>
+                <span className="product-category-label">
+                  {product.category === "resine" ? "RÉSINE CBD" : "FLEUR CBD"} 🌿
+                </span>
+                
+                {/* Grille de prix */}
+                <div className="price-grid">
+                  {product.prices.map((p, idx) => (
+                    <div key={idx} className="price-item">
+                      <span className="price-qty">{p.qty}</span>
+                      <span className="price-value">{p.price}€</span>
+                    </div>
+                  ))}
+                </div>
+
+                <button className="order-btn" data-testid={`order-${product.id}`}>
+                  <ShoppingBag size={18} />
+                  Commander
                 </button>
               </div>
             </div>
+          ))}
+        </div>
+      ) : (
+        <div className="coming-soon" data-testid="coming-soon">
+          <div className="coming-soon-icon">
+            <Leaf size={60} />
           </div>
-        ))}
-      </div>
+          <h2>Nouveaux produits bientôt disponibles</h2>
+          <p>Notre sélection de {activeCategory === "resine" ? "résines" : "fleurs"} CBD arrive très prochainement !</p>
+          <p className="stay-tuned">Restez connectés 🌿</p>
+        </div>
+      )}
 
       {/* Bottom Navigation */}
       <div className="catalogue-nav">
