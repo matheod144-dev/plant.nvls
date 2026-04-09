@@ -192,6 +192,13 @@ async def get_bot_info():
         response = await client.get(f"{TELEGRAM_API}/getMe")
         return response.json()
 
+@app.get("/api/telegram/updates")
+async def get_updates():
+    """Récupère les dernières mises à jour pour trouver le chat_id"""
+    async with httpx.AsyncClient() as client:
+        response = await client.get(f"{TELEGRAM_API}/getUpdates")
+        return response.json()
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8001)
