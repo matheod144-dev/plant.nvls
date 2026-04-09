@@ -1,89 +1,197 @@
-from fastapi import FastAPI, APIRouter
-from dotenv import load_dotenv
-from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import List, Optional
+import httpx
 import os
-import logging
-from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
-from typing import List
-import uuid
-from datetime import datetime, timezone
+import asyncio
 
-
-ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
-
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
-
-# Create the main app without a prefix
 app = FastAPI()
 
-# Create a router with the /api prefix
-api_router = APIRouter(prefix="/api")
-
-
-# Define Models
-class StatusCheck(BaseModel):
-    model_config = ConfigDict(extra="ignore")  # Ignore MongoDB's _id field
-    
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-class StatusCheckCreate(BaseModel):
-    client_name: str
-
-# Add your routes to the router instead of directly to app
-@api_router.get("/")
-async def root():
-    return {"message": "Hello World"}
-
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.model_dump()
-    status_obj = StatusCheck(**status_dict)
-    
-    # Convert to dict and serialize datetime to ISO string for MongoDB
-    doc = status_obj.model_dump()
-    doc['timestamp'] = doc['timestamp'].isoformat()
-    
-    _ = await db.status_checks.insert_one(doc)
-    return status_obj
-
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    # Exclude MongoDB's _id field from the query results
-    status_checks = await db.status_checks.find({}, {"_id": 0}).to_list(1000)
-    
-    # Convert ISO string timestamps back to datetime objects
-    for check in status_checks:
-        if isinstance(check['timestamp'], str):
-            check['timestamp'] = datetime.fromisoformat(check['timestamp'])
-    
-    return status_checks
-
-# Include the router in the main app
-app.include_router(api_router)
-
+# CORS
 app.add_middleware(
     CORSMiddleware,
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+# Configuration Telegram
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8641085735:AAHYpbZEWkHmJ75uc4IIMv1BR30hBHVT7HM")
+TELEGRAM_ORDER_CHAT_ID = os.environ.get("TELEGRAM_ORDER_CHAT_ID", "")  # À configurer
+TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
+# URL du catalogue (à mettre à jour avec votre URL)
+CATALOGUE_URL = os.environ.get("CATALOGUE_URL", "https://traduire-systeme.preview.emergentagent.com/catalogue")
+CONTACT_LINK = "https://t.me/+A0IQGf2DjC1kNDZk"
+
+# Models
+class CartItem(BaseModel):
+    productId: int
+    name: str
+    qty: str
+    price: int
+    grams: int
+    quantity: int
+
+class OrderRequest(BaseModel):
+    prenom: str
+    heure: str
+    cart: List[CartItem]
+    total: int
+    message: str
+
+# Endpoints
+@app.get("/api/")
+async def root():
+    return {"message": "plant.nvls API"}
+
+@app.get("/api/health")
+async def health():
+    return {"status": "ok"}
+
+@app.post("/api/send-order")
+async def send_order(order: OrderRequest):
+    """Envoie la commande sur le canal Telegram des commandes"""
+    try:
+        # Construire le message formaté
+        message = f"🌿 *NOUVELLE COMMANDE*\n\n"
+        message += f"👤 *Client:* {order.prenom}\n"
+        message += f"🕐 *Heure souhaitée:* {order.heure}\n\n"
+        message += f"📦 *Articles:*\n"
+        
+        for item in order.cart:
+            message += f"  • {item.name} ({item.qty}) x{item.quantity} = {item.price * item.quantity}€\n"
+        
+        message += f"\n💰 *TOTAL: {order.total}€*"
+
+        # Envoyer via le bot Telegram au canal des commandes
+        # On utilise le lien du groupe pour obtenir le chat_id
+        # Pour l'instant, on envoie directement si le chat_id est configuré
+        if TELEGRAM_ORDER_CHAT_ID:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{TELEGRAM_API}/sendMessage",
+                    json={
+                        "chat_id": TELEGRAM_ORDER_CHAT_ID,
+                        "text": message,
+                        "parse_mode": "Markdown"
+                    }
+                )
+                if response.status_code == 200:
+                    return {"success": True, "message": "Commande envoyée"}
+                else:
+                    raise HTTPException(status_code=500, detail="Erreur Telegram")
+        else:
+            # Pas de chat_id configuré, le frontend utilisera le fallback
+            return {"success": False, "message": "Chat ID non configuré"}
+            
+    except Exception as e:
+        print(f"Erreur envoi commande: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ====== BOT TELEGRAM ======
+
+async def send_telegram_message(chat_id: int, text: str, reply_markup: dict = None):
+    """Envoie un message Telegram avec boutons optionnels"""
+    async with httpx.AsyncClient() as client:
+        payload = {
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "Markdown"
+        }
+        if reply_markup:
+            payload["reply_markup"] = reply_markup
+        
+        await client.post(f"{TELEGRAM_API}/sendMessage", json=payload)
+
+async def send_telegram_photo(chat_id: int, photo_url: str, caption: str, reply_markup: dict = None):
+    """Envoie une photo avec caption et boutons"""
+    async with httpx.AsyncClient() as client:
+        payload = {
+            "chat_id": chat_id,
+            "photo": photo_url,
+            "caption": caption,
+            "parse_mode": "Markdown"
+        }
+        if reply_markup:
+            payload["reply_markup"] = reply_markup
+        
+        await client.post(f"{TELEGRAM_API}/sendPhoto", json=payload)
+
+def get_main_menu_keyboard():
+    """Retourne le clavier avec les boutons principaux"""
+    return {
+        "inline_keyboard": [
+            [{"text": "📞 Contact", "url": CONTACT_LINK}],
+            [{"text": "🛒 Catalogue", "web_app": {"url": CATALOGUE_URL}}],
+            [{"text": "🔗 Nos Liens", "url": CONTACT_LINK}]
+        ]
+    }
+
+@app.post("/api/telegram/webhook")
+async def telegram_webhook(update: dict):
+    """Webhook pour recevoir les messages du bot Telegram"""
+    try:
+        if "message" in update:
+            message = update["message"]
+            chat_id = message["chat"]["id"]
+            text = message.get("text", "")
+            
+            if text == "/start":
+                # Message de bienvenue avec image et boutons
+                welcome_text = (
+                    "🌿 *plant.nvls Bot* 🌿\n\n"
+                    "Bienvenue chez plant.nvls !\n"
+                    "Découvrez notre sélection premium.\n\n"
+                    "Utilisez les boutons ci-dessous pour naviguer 👇"
+                )
+                
+                # Envoyer le message avec les boutons
+                await send_telegram_message(
+                    chat_id, 
+                    welcome_text, 
+                    get_main_menu_keyboard()
+                )
+                
+            elif text == "/menu":
+                await send_telegram_message(
+                    chat_id,
+                    "🌿 *Menu Principal*\n\nChoisissez une option:",
+                    get_main_menu_keyboard()
+                )
+                
+        return {"ok": True}
+    except Exception as e:
+        print(f"Webhook error: {e}")
+        return {"ok": False, "error": str(e)}
+
+@app.get("/api/telegram/setup")
+async def setup_telegram_webhook():
+    """Configure le webhook Telegram (à appeler une fois)"""
+    webhook_url = f"{os.environ.get('REACT_APP_BACKEND_URL', 'https://traduire-systeme.preview.emergentagent.com')}/api/telegram/webhook"
+    
+    async with httpx.AsyncClient() as client:
+        # Supprimer l'ancien webhook
+        await client.post(f"{TELEGRAM_API}/deleteWebhook")
+        
+        # Configurer le nouveau webhook
+        response = await client.post(
+            f"{TELEGRAM_API}/setWebhook",
+            json={"url": webhook_url}
+        )
+        
+        return response.json()
+
+@app.get("/api/telegram/info")
+async def get_bot_info():
+    """Obtient les informations du bot"""
+    async with httpx.AsyncClient() as client:
+        response = await client.get(f"{TELEGRAM_API}/getMe")
+        return response.json()
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8001)

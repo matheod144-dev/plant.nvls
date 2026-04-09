@@ -1,7 +1,7 @@
 import { useState } from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { Leaf, MessageCircle, ExternalLink, Home, ShoppingBag, Plus, Minus, X, Send } from "lucide-react";
+import { Leaf, MessageCircle, ExternalLink, Home, ShoppingBag, Plus, Minus, X, Send, Clock, User } from "lucide-react";
 
 // Données produits
 const products = [
@@ -21,8 +21,11 @@ const products = [
   },
 ];
 
-// Lien Telegram
-const TELEGRAM_LINK = "https://t.me/+A0IQGf2DjC1kNDZk";
+// Liens Telegram
+const TELEGRAM_CONTACT = "https://t.me/+A0IQGf2DjC1kNDZk";
+const TELEGRAM_ORDERS = "https://t.me/+dgR1-petSrYyMmJk";
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 // Mini-App Landing Page
 const MiniApp = () => {
@@ -64,7 +67,7 @@ const MiniApp = () => {
             <ShoppingBag size={18} />
             <span>Catalogue</span>
           </a>
-          <a href={TELEGRAM_LINK} target="_blank" rel="noopener noreferrer" className="action-btn secondary" data-testid="contact-btn">
+          <a href={TELEGRAM_CONTACT} target="_blank" rel="noopener noreferrer" className="action-btn secondary" data-testid="contact-btn">
             <MessageCircle size={18} />
             <span>Contact</span>
           </a>
@@ -85,11 +88,15 @@ const MiniApp = () => {
   );
 };
 
-// Catalogue Page avec Panier
+// Catalogue Page avec Panier et Formulaire
 const Catalogue = () => {
   const [activeCategory, setActiveCategory] = useState("fleur");
   const [cart, setCart] = useState([]);
   const [showCart, setShowCart] = useState(false);
+  const [showOrderForm, setShowOrderForm] = useState(false);
+  const [orderForm, setOrderForm] = useState({ prenom: "", heure: "" });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [orderSuccess, setOrderSuccess] = useState(false);
   
   const filteredProducts = products.filter(p => p.category === activeCategory);
   const hasProducts = filteredProducts.length > 0;
@@ -139,16 +146,71 @@ const Catalogue = () => {
   const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  // Envoyer commande sur Telegram
-  const sendToTelegram = () => {
-    let message = "🌿 *Nouvelle Commande plant.nvls*\n\n";
+  // Passer à la commande
+  const proceedToOrder = () => {
+    setShowOrderForm(true);
+  };
+
+  // Envoyer commande
+  const submitOrder = async () => {
+    if (!orderForm.prenom.trim() || !orderForm.heure.trim()) {
+      alert("Veuillez remplir tous les champs");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    // Construire le message
+    let message = `🌿 *NOUVELLE COMMANDE*\n\n`;
+    message += `👤 *Client:* ${orderForm.prenom}\n`;
+    message += `🕐 *Heure souhaitée:* ${orderForm.heure}\n\n`;
+    message += `📦 *Articles:*\n`;
     cart.forEach(item => {
-      message += `• ${item.name} (${item.qty}) x${item.quantity} = ${item.price * item.quantity}€\n`;
+      message += `  • ${item.name} (${item.qty}) x${item.quantity} = ${item.price * item.quantity}€\n`;
     });
-    message += `\n💰 *Total: ${totalPrice}€*`;
-    
-    const encodedMessage = encodeURIComponent(message);
-    window.open(`${TELEGRAM_LINK}?text=${encodedMessage}`, '_blank');
+    message += `\n💰 *TOTAL: ${totalPrice}€*`;
+
+    try {
+      // Envoyer via le backend (bot Telegram)
+      const response = await fetch(`${BACKEND_URL}/api/send-order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prenom: orderForm.prenom,
+          heure: orderForm.heure,
+          cart: cart,
+          total: totalPrice,
+          message: message
+        })
+      });
+
+      if (response.ok) {
+        setOrderSuccess(true);
+        setCart([]);
+        setOrderForm({ prenom: "", heure: "" });
+        setTimeout(() => {
+          setShowCart(false);
+          setShowOrderForm(false);
+          setOrderSuccess(false);
+        }, 3000);
+      } else {
+        // Fallback: ouvrir Telegram directement
+        const encodedMessage = encodeURIComponent(message);
+        window.open(`${TELEGRAM_ORDERS}?text=${encodedMessage}`, '_blank');
+        setShowCart(false);
+        setShowOrderForm(false);
+        setCart([]);
+      }
+    } catch (error) {
+      // Fallback: ouvrir Telegram directement
+      const encodedMessage = encodeURIComponent(message);
+      window.open(`${TELEGRAM_ORDERS}?text=${encodedMessage}`, '_blank');
+      setShowCart(false);
+      setShowOrderForm(false);
+      setCart([]);
+    }
+
+    setIsSubmitting(false);
   };
 
   return (
@@ -233,7 +295,7 @@ const Catalogue = () => {
         <a href="/" className="nav-item" data-testid="nav-home">
           <Home size={24} />
         </a>
-        <a href={TELEGRAM_LINK} target="_blank" rel="noopener noreferrer" className="nav-item" data-testid="nav-chat">
+        <a href={TELEGRAM_CONTACT} target="_blank" rel="noopener noreferrer" className="nav-item" data-testid="nav-chat">
           <MessageCircle size={24} />
         </a>
         <button 
@@ -248,21 +310,96 @@ const Catalogue = () => {
 
       {/* Cart Modal */}
       {showCart && (
-        <div className="cart-overlay" onClick={() => setShowCart(false)}>
+        <div className="cart-overlay" onClick={() => { setShowCart(false); setShowOrderForm(false); }}>
           <div className="cart-modal" onClick={e => e.stopPropagation()} data-testid="cart-modal">
             <div className="cart-header">
-              <h2>Votre Panier</h2>
-              <button className="close-cart" onClick={() => setShowCart(false)}>
+              <h2>{showOrderForm ? "Finaliser la commande" : "Votre Panier"}</h2>
+              <button className="close-cart" onClick={() => { setShowCart(false); setShowOrderForm(false); }}>
                 <X size={24} />
               </button>
             </div>
 
-            {cart.length === 0 ? (
+            {orderSuccess ? (
+              <div className="order-success">
+                <div className="success-icon">✓</div>
+                <h3>Commande envoyée !</h3>
+                <p>Nous vous contacterons bientôt 🌿</p>
+              </div>
+            ) : cart.length === 0 ? (
               <div className="cart-empty">
                 <ShoppingBag size={48} />
                 <p>Votre panier est vide</p>
               </div>
+            ) : showOrderForm ? (
+              /* Formulaire de commande */
+              <div className="order-form">
+                <div className="order-summary">
+                  <h4>Récapitulatif</h4>
+                  {cart.map((item, index) => (
+                    <div key={index} className="summary-item">
+                      <span>{item.name} ({item.qty}) x{item.quantity}</span>
+                      <span>{item.price * item.quantity}€</span>
+                    </div>
+                  ))}
+                  <div className="summary-total">
+                    <span>Total</span>
+                    <span>{totalPrice}€</span>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>
+                    <User size={18} />
+                    Votre prénom
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Entrez votre prénom"
+                    value={orderForm.prenom}
+                    onChange={(e) => setOrderForm({...orderForm, prenom: e.target.value})}
+                    data-testid="input-prenom"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>
+                    <Clock size={18} />
+                    Heure de retrait souhaitée
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ex: 18h30, ce soir, demain 14h..."
+                    value={orderForm.heure}
+                    onChange={(e) => setOrderForm({...orderForm, heure: e.target.value})}
+                    data-testid="input-heure"
+                  />
+                </div>
+
+                <button 
+                  className="submit-order-btn" 
+                  onClick={submitOrder}
+                  disabled={isSubmitting}
+                  data-testid="submit-order"
+                >
+                  {isSubmitting ? (
+                    "Envoi en cours..."
+                  ) : (
+                    <>
+                      <Send size={20} />
+                      Envoyer la commande
+                    </>
+                  )}
+                </button>
+
+                <button 
+                  className="back-btn"
+                  onClick={() => setShowOrderForm(false)}
+                >
+                  ← Retour au panier
+                </button>
+              </div>
             ) : (
+              /* Liste du panier */
               <>
                 <div className="cart-items">
                   {cart.map((item, index) => (
@@ -295,9 +432,9 @@ const Catalogue = () => {
                     <span>Total</span>
                     <span className="cart-total-price">{totalPrice}€</span>
                   </div>
-                  <button className="checkout-btn" onClick={sendToTelegram} data-testid="checkout-btn">
+                  <button className="checkout-btn" onClick={proceedToOrder} data-testid="checkout-btn">
                     <Send size={20} />
-                    Commander sur Telegram
+                    Passer commande
                   </button>
                 </div>
               </>
