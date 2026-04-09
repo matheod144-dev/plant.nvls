@@ -1,11 +1,10 @@
 import { useState } from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { Leaf, MessageCircle, ExternalLink, Home, ShoppingBag } from "lucide-react";
+import { Leaf, MessageCircle, ExternalLink, Home, ShoppingBag, Plus, Minus, X, Send } from "lucide-react";
 
-// Données produits CBD
+// Données produits
 const products = [
-  // Fleurs CBD - Seul produit disponible pour le moment
   { 
     id: 1, 
     name: "Amnesia", 
@@ -13,23 +12,24 @@ const products = [
     image: "https://images.unsplash.com/photo-1503262028195-93c528f03218?w=400&h=400&fit=crop&q=80", 
     badge: "TOP",
     prices: [
-      { qty: "1g", price: 10 },
-      { qty: "2g", price: 20 },
-      { qty: "5g", price: 40 },
-      { qty: "10g", price: 80 },
-      { qty: "25g", price: 190 },
+      { qty: "1g", price: 10, grams: 1 },
+      { qty: "2g", price: 20, grams: 2 },
+      { qty: "5g", price: 40, grams: 5 },
+      { qty: "10g", price: 80, grams: 10 },
+      { qty: "25g", price: 190, grams: 25 },
     ]
   },
 ];
+
+// Lien Telegram
+const TELEGRAM_LINK = "https://t.me/+A0IQGf2DjC1kNDZk";
 
 // Mini-App Landing Page
 const MiniApp = () => {
   return (
     <div className="mini-app-container" data-testid="mini-app">
-      {/* Background Pattern */}
       <div className="background-pattern"></div>
       
-      {/* Header */}
       <div className="mini-app-header">
         <div className="logo-container" data-testid="logo">
           <Leaf className="logo-icon" />
@@ -37,17 +37,14 @@ const MiniApp = () => {
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="mini-app-content">
-        {/* Logo Circle */}
         <div className="logo-circle" data-testid="main-logo">
           <Leaf size={80} className="main-leaf-icon" />
         </div>
         
         <h1 className="brand-title">plant.nvls</h1>
-        <p className="brand-subtitle">CBD Premium • Qualité Supérieure</p>
+        <p className="brand-subtitle">Premium • Qualité Supérieure</p>
 
-        {/* Message Box */}
         <div className="message-box" data-testid="welcome-message">
           <div className="message-header">
             <Leaf size={18} className="message-icon" />
@@ -55,23 +52,22 @@ const MiniApp = () => {
           </div>
           <p className="message-text">
             Bienvenue chez plant.nvls ! 🌿<br />
-            Découvrez notre sélection premium de CBD.
+            Découvrez notre sélection premium.
           </p>
           <p className="message-hint">
             Utilisez les boutons ci-dessous pour naviguer 👇
           </p>
         </div>
 
-        {/* Action Buttons */}
         <div className="action-buttons">
           <a href="/catalogue" className="action-btn primary" data-testid="catalogue-btn">
             <ShoppingBag size={18} />
-            <span>Catalogue CBD</span>
+            <span>Catalogue</span>
           </a>
-          <button className="action-btn secondary" data-testid="contact-btn">
+          <a href={TELEGRAM_LINK} target="_blank" rel="noopener noreferrer" className="action-btn secondary" data-testid="contact-btn">
             <MessageCircle size={18} />
             <span>Contact</span>
-          </button>
+          </a>
           <button className="action-btn secondary" data-testid="links-btn">
             <ExternalLink size={18} />
             <span>Nos Liens</span>
@@ -79,7 +75,6 @@ const MiniApp = () => {
         </div>
       </div>
 
-      {/* Bottom Nav */}
       <div className="bottom-nav">
         <a href="/catalogue" className="nav-btn catalogue-nav" data-testid="nav-catalogue">
           <ShoppingBag size={20} />
@@ -90,20 +85,79 @@ const MiniApp = () => {
   );
 };
 
-// Catalogue Page
+// Catalogue Page avec Panier
 const Catalogue = () => {
   const [activeCategory, setActiveCategory] = useState("fleur");
+  const [cart, setCart] = useState([]);
+  const [showCart, setShowCart] = useState(false);
   
   const filteredProducts = products.filter(p => p.category === activeCategory);
   const hasProducts = filteredProducts.length > 0;
+
+  // Ajouter au panier
+  const addToCart = (product, priceOption) => {
+    const existingItem = cart.find(
+      item => item.productId === product.id && item.qty === priceOption.qty
+    );
+    
+    if (existingItem) {
+      setCart(cart.map(item => 
+        item.productId === product.id && item.qty === priceOption.qty
+          ? { ...item, quantity: item.quantity + 1 }
+          : item
+      ));
+    } else {
+      setCart([...cart, {
+        productId: product.id,
+        name: product.name,
+        qty: priceOption.qty,
+        price: priceOption.price,
+        grams: priceOption.grams,
+        quantity: 1
+      }]);
+    }
+  };
+
+  // Modifier quantité
+  const updateQuantity = (index, delta) => {
+    const newCart = [...cart];
+    newCart[index].quantity += delta;
+    if (newCart[index].quantity <= 0) {
+      newCart.splice(index, 1);
+    }
+    setCart(newCart);
+  };
+
+  // Supprimer du panier
+  const removeFromCart = (index) => {
+    const newCart = [...cart];
+    newCart.splice(index, 1);
+    setCart(newCart);
+  };
+
+  // Calculer le total
+  const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
+
+  // Envoyer commande sur Telegram
+  const sendToTelegram = () => {
+    let message = "🌿 *Nouvelle Commande plant.nvls*\n\n";
+    cart.forEach(item => {
+      message += `• ${item.name} (${item.qty}) x${item.quantity} = ${item.price * item.quantity}€\n`;
+    });
+    message += `\n💰 *Total: ${totalPrice}€*`;
+    
+    const encodedMessage = encodeURIComponent(message);
+    window.open(`${TELEGRAM_LINK}?text=${encodedMessage}`, '_blank');
+  };
 
   return (
     <div className="catalogue-container" data-testid="catalogue">
       {/* Header Ticker */}
       <div className="ticker-header">
         <div className="ticker-content">
-          <span>🌿 Disponible 24h/24 7j/7 • plant.nvls • CBD Premium 🌿</span>
-          <span>🌿 Disponible 24h/24 7j/7 • plant.nvls • CBD Premium 🌿</span>
+          <span>🌿 Disponible 24h/24 7j/7 • plant.nvls • Premium 🌿</span>
+          <span>🌿 Disponible 24h/24 7j/7 • plant.nvls • Premium 🌿</span>
         </div>
       </div>
 
@@ -141,23 +195,24 @@ const Catalogue = () => {
               <div className="product-info-full">
                 <h3 className="product-name-large">{product.name}</h3>
                 <span className="product-category-label">
-                  {product.category === "resine" ? "RÉSINE CBD" : "FLEUR CBD"} 🌿
+                  {product.category === "resine" ? "RÉSINE" : "FLEUR"} 🌿
                 </span>
                 
-                {/* Grille de prix */}
+                {/* Grille de prix avec boutons d'ajout */}
                 <div className="price-grid">
                   {product.prices.map((p, idx) => (
-                    <div key={idx} className="price-item">
+                    <button 
+                      key={idx} 
+                      className="price-item clickable"
+                      onClick={() => addToCart(product, p)}
+                      data-testid={`add-${product.id}-${p.qty}`}
+                    >
                       <span className="price-qty">{p.qty}</span>
                       <span className="price-value">{p.price}€</span>
-                    </div>
+                      <Plus size={14} className="price-add-icon" />
+                    </button>
                   ))}
                 </div>
-
-                <a href="https://t.me/+A0IQGf2DjC1kNDZk" target="_blank" rel="noopener noreferrer" className="order-btn" data-testid={`order-${product.id}`}>
-                  <ShoppingBag size={18} />
-                  Commander
-                </a>
               </div>
             </div>
           ))}
@@ -168,7 +223,7 @@ const Catalogue = () => {
             <Leaf size={60} />
           </div>
           <h2>Nouveaux produits bientôt disponibles</h2>
-          <p>Notre sélection de {activeCategory === "resine" ? "résines" : "fleurs"} CBD arrive très prochainement !</p>
+          <p>Notre sélection de {activeCategory === "resine" ? "résines" : "fleurs"} arrive très prochainement !</p>
           <p className="stay-tuned">Restez connectés 🌿</p>
         </div>
       )}
@@ -178,13 +233,78 @@ const Catalogue = () => {
         <a href="/" className="nav-item" data-testid="nav-home">
           <Home size={24} />
         </a>
-        <button className="nav-item" data-testid="nav-chat">
+        <a href={TELEGRAM_LINK} target="_blank" rel="noopener noreferrer" className="nav-item" data-testid="nav-chat">
           <MessageCircle size={24} />
-        </button>
-        <button className="nav-item" data-testid="nav-cart">
+        </a>
+        <button 
+          className={`nav-item cart-btn ${totalItems > 0 ? 'has-items' : ''}`} 
+          onClick={() => setShowCart(true)}
+          data-testid="nav-cart"
+        >
           <ShoppingBag size={24} />
+          {totalItems > 0 && <span className="cart-badge">{totalItems}</span>}
         </button>
       </div>
+
+      {/* Cart Modal */}
+      {showCart && (
+        <div className="cart-overlay" onClick={() => setShowCart(false)}>
+          <div className="cart-modal" onClick={e => e.stopPropagation()} data-testid="cart-modal">
+            <div className="cart-header">
+              <h2>Votre Panier</h2>
+              <button className="close-cart" onClick={() => setShowCart(false)}>
+                <X size={24} />
+              </button>
+            </div>
+
+            {cart.length === 0 ? (
+              <div className="cart-empty">
+                <ShoppingBag size={48} />
+                <p>Votre panier est vide</p>
+              </div>
+            ) : (
+              <>
+                <div className="cart-items">
+                  {cart.map((item, index) => (
+                    <div key={index} className="cart-item" data-testid={`cart-item-${index}`}>
+                      <div className="cart-item-info">
+                        <span className="cart-item-name">{item.name}</span>
+                        <span className="cart-item-qty">{item.qty}</span>
+                      </div>
+                      <div className="cart-item-controls">
+                        <button onClick={() => updateQuantity(index, -1)} data-testid={`decrease-${index}`}>
+                          <Minus size={16} />
+                        </button>
+                        <span className="cart-item-quantity">{item.quantity}</span>
+                        <button onClick={() => updateQuantity(index, 1)} data-testid={`increase-${index}`}>
+                          <Plus size={16} />
+                        </button>
+                      </div>
+                      <div className="cart-item-price">
+                        {item.price * item.quantity}€
+                      </div>
+                      <button className="cart-item-remove" onClick={() => removeFromCart(index)}>
+                        <X size={18} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="cart-footer">
+                  <div className="cart-total">
+                    <span>Total</span>
+                    <span className="cart-total-price">{totalPrice}€</span>
+                  </div>
+                  <button className="checkout-btn" onClick={sendToTelegram} data-testid="checkout-btn">
+                    <Send size={20} />
+                    Commander sur Telegram
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
