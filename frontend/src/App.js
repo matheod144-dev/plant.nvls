@@ -154,10 +154,10 @@ const Catalogue = () => {
                   ))}
                 </div>
 
-                <button className="order-btn" data-testid={`order-${product.id}`}>
+                <a href="https://t.me/+A0IQGf2DjC1kNDZk" target="_blank" rel="noopener noreferrer" className="order-btn" data-testid={`order-${product.id}`}>
                   <ShoppingBag size={18} />
                   Commander
-                </button>
+                </a>
               </div>
             </div>
           ))}
