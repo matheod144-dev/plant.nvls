@@ -1,6 +1,6 @@
 import { useState } from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, HashRouter } from "react-router-dom";
 import { Leaf, MessageCircle, ExternalLink, Home, ShoppingBag, Plus, Minus, X, Send, Clock, User } from "lucide-react";
 
 // Données produits
@@ -24,8 +24,7 @@ const products = [
 // Liens Telegram
 const TELEGRAM_CONTACT = "https://t.me/+A0IQGf2DjC1kNDZk";
 const TELEGRAM_ORDERS = "https://t.me/+dgR1-petSrYyMmJk";
-
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const TELEGRAM_BOT = "https://t.me/plantnvls_bot";
 
 // Mini-App Landing Page
 const MiniApp = () => {
@@ -63,7 +62,7 @@ const MiniApp = () => {
         </div>
 
         <div className="action-buttons">
-          <a href="/catalogue" className="action-btn primary" data-testid="catalogue-btn">
+          <a href="#/catalogue" className="action-btn primary" data-testid="catalogue-btn">
             <ShoppingBag size={18} />
             <span>Catalogue</span>
           </a>
@@ -71,15 +70,15 @@ const MiniApp = () => {
             <MessageCircle size={18} />
             <span>Contact</span>
           </a>
-          <button className="action-btn secondary" data-testid="links-btn">
+          <a href={TELEGRAM_BOT} target="_blank" rel="noopener noreferrer" className="action-btn secondary" data-testid="links-btn">
             <ExternalLink size={18} />
-            <span>Nos Liens</span>
-          </button>
+            <span>Notre Bot</span>
+          </a>
         </div>
       </div>
 
       <div className="bottom-nav">
-        <a href="/catalogue" className="nav-btn catalogue-nav" data-testid="nav-catalogue">
+        <a href="#/catalogue" className="nav-btn catalogue-nav" data-testid="nav-catalogue">
           <ShoppingBag size={20} />
           <span>Catalogue</span>
         </a>
@@ -95,8 +94,6 @@ const Catalogue = () => {
   const [showCart, setShowCart] = useState(false);
   const [showOrderForm, setShowOrderForm] = useState(false);
   const [orderForm, setOrderForm] = useState({ prenom: "", heure: "" });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [orderSuccess, setOrderSuccess] = useState(false);
   
   const filteredProducts = products.filter(p => p.category === activeCategory);
   const hasProducts = filteredProducts.length > 0;
@@ -151,66 +148,32 @@ const Catalogue = () => {
     setShowOrderForm(true);
   };
 
-  // Envoyer commande
-  const submitOrder = async () => {
+  // Envoyer commande sur Telegram
+  const submitOrder = () => {
     if (!orderForm.prenom.trim() || !orderForm.heure.trim()) {
       alert("Veuillez remplir tous les champs");
       return;
     }
 
-    setIsSubmitting(true);
-
     // Construire le message
-    let message = `🌿 *NOUVELLE COMMANDE*\n\n`;
-    message += `👤 *Client:* ${orderForm.prenom}\n`;
-    message += `🕐 *Heure souhaitée:* ${orderForm.heure}\n\n`;
-    message += `📦 *Articles:*\n`;
+    let message = `🌿 NOUVELLE COMMANDE\n\n`;
+    message += `👤 Client: ${orderForm.prenom}\n`;
+    message += `🕐 Heure souhaitée: ${orderForm.heure}\n\n`;
+    message += `📦 Articles:\n`;
     cart.forEach(item => {
-      message += `  • ${item.name} (${item.qty}) x${item.quantity} = ${item.price * item.quantity}€\n`;
+      message += `• ${item.name} (${item.qty}) x${item.quantity} = ${item.price * item.quantity}€\n`;
     });
-    message += `\n💰 *TOTAL: ${totalPrice}€*`;
+    message += `\n💰 TOTAL: ${totalPrice}€`;
 
-    try {
-      // Envoyer via le backend (bot Telegram)
-      const response = await fetch(`${BACKEND_URL}/api/send-order`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prenom: orderForm.prenom,
-          heure: orderForm.heure,
-          cart: cart,
-          total: totalPrice,
-          message: message
-        })
-      });
-
-      if (response.ok) {
-        setOrderSuccess(true);
-        setCart([]);
-        setOrderForm({ prenom: "", heure: "" });
-        setTimeout(() => {
-          setShowCart(false);
-          setShowOrderForm(false);
-          setOrderSuccess(false);
-        }, 3000);
-      } else {
-        // Fallback: ouvrir Telegram directement
-        const encodedMessage = encodeURIComponent(message);
-        window.open(`${TELEGRAM_ORDERS}?text=${encodedMessage}`, '_blank');
-        setShowCart(false);
-        setShowOrderForm(false);
-        setCart([]);
-      }
-    } catch (error) {
-      // Fallback: ouvrir Telegram directement
-      const encodedMessage = encodeURIComponent(message);
-      window.open(`${TELEGRAM_ORDERS}?text=${encodedMessage}`, '_blank');
-      setShowCart(false);
-      setShowOrderForm(false);
-      setCart([]);
-    }
-
-    setIsSubmitting(false);
+    // Ouvrir Telegram avec le message
+    const encodedMessage = encodeURIComponent(message);
+    window.open(`https://t.me/share/url?url=&text=${encodedMessage}`, '_blank');
+    
+    // Reset
+    setCart([]);
+    setOrderForm({ prenom: "", heure: "" });
+    setShowCart(false);
+    setShowOrderForm(false);
   };
 
   return (
@@ -292,7 +255,7 @@ const Catalogue = () => {
 
       {/* Bottom Navigation */}
       <div className="catalogue-nav">
-        <a href="/" className="nav-item" data-testid="nav-home">
+        <a href="#/" className="nav-item" data-testid="nav-home">
           <Home size={24} />
         </a>
         <a href={TELEGRAM_CONTACT} target="_blank" rel="noopener noreferrer" className="nav-item" data-testid="nav-chat">
@@ -319,13 +282,7 @@ const Catalogue = () => {
               </button>
             </div>
 
-            {orderSuccess ? (
-              <div className="order-success">
-                <div className="success-icon">✓</div>
-                <h3>Commande envoyée !</h3>
-                <p>Nous vous contacterons bientôt 🌿</p>
-              </div>
-            ) : cart.length === 0 ? (
+            {cart.length === 0 ? (
               <div className="cart-empty">
                 <ShoppingBag size={48} />
                 <p>Votre panier est vide</p>
@@ -378,17 +335,10 @@ const Catalogue = () => {
                 <button 
                   className="submit-order-btn" 
                   onClick={submitOrder}
-                  disabled={isSubmitting}
                   data-testid="submit-order"
                 >
-                  {isSubmitting ? (
-                    "Envoi en cours..."
-                  ) : (
-                    <>
-                      <Send size={20} />
-                      Envoyer la commande
-                    </>
-                  )}
+                  <Send size={20} />
+                  Envoyer sur Telegram
                 </button>
 
                 <button 
@@ -449,12 +399,12 @@ const Catalogue = () => {
 function App() {
   return (
     <div className="App">
-      <BrowserRouter>
+      <HashRouter>
         <Routes>
           <Route path="/" element={<MiniApp />} />
           <Route path="/catalogue" element={<Catalogue />} />
         </Routes>
-      </BrowserRouter>
+      </HashRouter>
     </div>
   );
 }
